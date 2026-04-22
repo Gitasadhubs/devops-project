@@ -4,7 +4,6 @@ pipeline {
     environment {
         IMAGE_NAME = "devops-app"
         CONTAINER_NAME = "app"
-        PORT = "8083"
     }
 
     stages {
@@ -51,14 +50,15 @@ pipeline {
             }
         }
 
-        stage('Deploy (Compose)') {
+        stage('Deploy') {
             steps {
                 sh '''
-                echo "Stopping old stack..."
-                docker compose down || true
+                docker stop $CONTAINER_NAME || true
+                docker rm $CONTAINER_NAME || true
 
-                echo "Starting new stack..."
-                docker compose up -d --build
+                docker run -d --name $CONTAINER_NAME \
+                  -p 8083:8080 \
+                  $IMAGE_NAME
                 '''
             }
         }
@@ -66,9 +66,7 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                echo "Waiting for app..."
-                sleep 20
-
+                sleep 15
                 curl -f http://localhost:8083 || exit 1
                 '''
             }
@@ -76,20 +74,8 @@ pipeline {
 
         stage('Show URL') {
             steps {
-                echo "================================="
-                echo "APP URL: http://localhost:8083"
-                echo "================================="
+                echo "APP RUNNING: http://localhost:8083"
             }
-        }
-    }
-
-    post {
-        success {
-            echo "✅ Deployment Successful"
-        }
-
-        failure {
-            echo "❌ Pipeline Failed"
         }
     }
 }
