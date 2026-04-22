@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME = "java_app"
         IMAGE_NAME = "devops-app"
+        CONTAINER_NAME = "app"
         PORT = "8083"
     }
 
@@ -17,18 +17,30 @@ pipeline {
             }
         }
 
-        stage('Build Jar') {
+        stage('Build Jar (Docker Maven)') {
             steps {
                 dir('app') {
-                    sh 'mvn clean package -DskipTests'
+                    sh '''
+                    docker run --rm \
+                      -v $PWD:/app \
+                      -w /app \
+                      maven:3.9.6-eclipse-temurin-17 \
+                      mvn clean package -DskipTests
+                    '''
                 }
             }
         }
 
-        stage('Test') {
+        stage('Test (Docker Maven)') {
             steps {
                 dir('app') {
-                    sh 'mvn test'
+                    sh '''
+                    docker run --rm \
+                      -v $PWD:/app \
+                      -w /app \
+                      maven:3.9.6-eclipse-temurin-17 \
+                      mvn test
+                    '''
                 }
             }
         }
@@ -55,10 +67,9 @@ pipeline {
             steps {
                 sh '''
                 echo "Waiting for app..."
-                sleep 15
+                sleep 20
 
                 curl -f http://localhost:8083 || exit 1
-                echo "App is UP"
                 '''
             }
         }
