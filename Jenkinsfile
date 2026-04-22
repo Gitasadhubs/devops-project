@@ -17,12 +17,25 @@ pipeline {
             }
         }
 
+        stage('Verify Workspace') {
+            steps {
+                sh '''
+                echo "Workspace:"
+                pwd
+                ls -lah
+                ls -lah $WORKSPACE/app
+                '''
+            }
+        }
+
         stage('Build Maven (Docker)') {
             steps {
                 sh '''
+                echo "Building Maven project..."
+
                 docker run --rm \
-                -v $WORKSPACE/app:/build \
-                -w /build \
+                -v $WORKSPACE:/workspace \
+                -w /workspace/app \
                 maven:3.9.6-eclipse-temurin-17 \
                 mvn clean package -DskipTests
                 '''
@@ -31,14 +44,21 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh 'docker build -t $IMAGE_NAME ./app'
+                sh '''
+                echo "Building Docker image..."
+
+                docker build -t $IMAGE_NAME ./app
+                '''
             }
         }
 
         stage('Deploy') {
             steps {
                 sh '''
+                echo "Stopping previous stack..."
                 docker compose down || true
+
+                echo "Starting new stack..."
                 docker compose up -d --build
                 '''
             }
@@ -47,20 +67,23 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                echo "Waiting for app..."
-                sleep 20
+                echo "Waiting for app startup..."
+                sleep 30
 
-                curl -f http://localhost:8083/ || exit 1
-                echo "APP IS RUNNING"
+                curl -f http://localhost:${PORT}/ || exit 1
+
+                echo "Application is healthy"
                 '''
             }
         }
 
         stage('App URL') {
             steps {
+                sh '''
                 echo "===================================="
-                echo "🚀 APP LIVE: http://localhost:8083"
+                echo "🚀 APP LIVE: http://localhost:${PORT}"
                 echo "===================================="
+                '''
             }
         }
     }
@@ -72,6 +95,10 @@ pipeline {
 
         failure {
             echo "❌ PIPELINE FAILED"
+        }
+
+        always {
+            sh 'docker ps || true'
         }
     }
 }
