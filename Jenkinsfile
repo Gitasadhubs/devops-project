@@ -1,13 +1,17 @@
 pipeline {
     agent any
 
+    environment {
+        APP_NAME = "devops-app"
+    }
+
     stages {
 
         stage('Checkout') {
             steps {
                 git branch: 'main',
-                url: 'git@github.com:Gitasadhubs/devops-project.git',
-                credentialsId: 'github-ssh'
+                    url: 'https://github.com/Gitasadhubs/devops-project.git',
+                    credentialsId: 'github-token'
             }
         }
 
@@ -48,7 +52,6 @@ pipeline {
         success {
             echo '✅ Build Successful'
         }
-
         failure {
             echo '❌ Build Failed'
         }
