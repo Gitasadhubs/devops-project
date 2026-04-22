@@ -4,6 +4,7 @@ pipeline {
     environment {
         IMAGE_NAME = "devops-app"
         CONTAINER_NAME = "app"
+        PORT = "8083"
     }
 
     stages {
@@ -16,10 +17,21 @@ pipeline {
             }
         }
 
+        stage('Locate Project') {
+            steps {
+                sh '''
+                echo "Finding pom.xml..."
+                find . -name pom.xml
+                '''
+            }
+        }
+
         stage('Build Jar (Docker Maven)') {
             steps {
                 dir('app') {
                     sh '''
+                    echo "Building Maven project inside Docker..."
+
                     docker run --rm \
                       -v $PWD:/app \
                       -w /app \
@@ -30,7 +42,7 @@ pipeline {
             }
         }
 
-        stage('Test (Docker Maven)') {
+        stage('Test') {
             steps {
                 dir('app') {
                     sh '''
@@ -46,16 +58,21 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh 'docker build -t $IMAGE_NAME ./app'
+                sh '''
+                echo "Building Docker image..."
+                docker build -t $IMAGE_NAME ./app
+                '''
             }
         }
 
         stage('Deploy') {
             steps {
                 sh '''
+                echo "Stopping old container..."
                 docker stop $CONTAINER_NAME || true
                 docker rm $CONTAINER_NAME || true
 
+                echo "Starting new container..."
                 docker run -d --name $CONTAINER_NAME \
                   -p 8083:8080 \
                   $IMAGE_NAME
@@ -66,16 +83,35 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                sleep 15
-                curl -f http://localhost:8083 || exit 1
+                echo "Waiting for application startup..."
+                
+                for i in {1..10}
+                do
+                  curl -f http://localhost:8083 && break
+                  echo "Waiting... attempt $i"
+                  sleep 5
+                done
                 '''
             }
         }
 
         stage('Show URL') {
             steps {
-                echo "APP RUNNING: http://localhost:8083"
+                echo "===================================="
+                echo "🚀 APPLICATION LIVE"
+                echo "URL: http://localhost:8083"
+                echo "===================================="
             }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Deployment Successful"
+        }
+
+        failure {
+            echo "❌ Deployment Failed"
         }
     }
 }
