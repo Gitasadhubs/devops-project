@@ -20,10 +20,18 @@ pipeline {
         stage('Verify Workspace') {
             steps {
                 sh '''
-                echo "Workspace:"
+                echo "===== WORKSPACE INFO ====="
                 pwd
+                echo "WORKSPACE = $WORKSPACE"
+
+                echo "Root Files:"
                 ls -lah
-                ls -lah $WORKSPACE/app
+
+                echo "Workspace Files:"
+                ls -lah $WORKSPACE
+
+                echo "App Folder:"
+                ls -lah $WORKSPACE/app || true
                 '''
             }
         }
@@ -31,7 +39,7 @@ pipeline {
         stage('Build Maven (Docker)') {
             steps {
                 sh '''
-                echo "Building Maven project..."
+                echo "===== MAVEN BUILD ====="
 
                 docker run --rm \
                 -v $WORKSPACE:/workspace \
@@ -42,24 +50,46 @@ pipeline {
             }
         }
 
+        stage('Run Tests') {
+            steps {
+                sh '''
+                echo "===== RUNNING TESTS ====="
+
+                docker run --rm \
+                -v $WORKSPACE:/workspace \
+                -w /workspace/app \
+                maven:3.9.6-eclipse-temurin-17 \
+                mvn test
+                '''
+            }
+        }
+
         stage('Docker Build') {
             steps {
                 sh '''
-                echo "Building Docker image..."
+                echo "===== BUILDING IMAGE ====="
 
                 docker build -t $IMAGE_NAME ./app
                 '''
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy Stack') {
             steps {
                 sh '''
-                echo "Stopping previous stack..."
-                docker compose down || true
+                echo "===== DEPLOYING ====="
 
-                echo "Starting new stack..."
+                docker compose down || true
                 docker compose up -d --build
+                '''
+            }
+        }
+
+        stage('Wait For App') {
+            steps {
+                sh '''
+                echo "===== WAITING FOR APP ====="
+                sleep 30
                 '''
             }
         }
@@ -67,8 +97,7 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                echo "Waiting for app startup..."
-                sleep 30
+                echo "===== HEALTH CHECK ====="
 
                 curl -f http://localhost:${PORT}/ || exit 1
 
@@ -77,12 +106,13 @@ pipeline {
             }
         }
 
-        stage('App URL') {
+        stage('Show URL') {
             steps {
                 sh '''
-                echo "===================================="
-                echo "🚀 APP LIVE: http://localhost:${PORT}"
-                echo "===================================="
+                echo "======================================"
+                echo "🚀 APPLICATION LIVE"
+                echo "URL: http://localhost:${PORT}"
+                echo "======================================"
                 '''
             }
         }
@@ -98,7 +128,10 @@ pipeline {
         }
 
         always {
-            sh 'docker ps || true'
+            sh '''
+            echo "===== CONTAINER STATUS ====="
+            docker ps || true
+            '''
         }
     }
 }
