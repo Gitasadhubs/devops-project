@@ -5,6 +5,7 @@ pipeline {
         IMAGE_NAME = "devops-app"
         CONTAINER_NAME = "app"
         PORT = "8083"
+        NETWORK_NAME = "devops-project_default"
     }
 
     stages {
@@ -17,7 +18,7 @@ pipeline {
             }
         }
 
-        stage('Build & Package (Docker only)') {
+        stage('Build Docker Image') {
             steps {
                 sh '''
                 echo "===== BUILDING IMAGE ====="
@@ -27,7 +28,30 @@ pipeline {
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy Database') {
+            steps {
+                sh '''
+                echo "===== STARTING DATABASE ====="
+
+                docker network inspect $NETWORK_NAME >/dev/null 2>&1 || \
+                docker network create $NETWORK_NAME
+
+                docker stop db || true
+                docker rm db || true
+
+                docker run -d \
+                --name db \
+                --network $NETWORK_NAME \
+                -e POSTGRES_DB=devops \
+                -e POSTGRES_USER=postgres \
+                -e POSTGRES_PASSWORD=postgres \
+                -p 5432:5432 \
+                postgres:15
+                '''
+            }
+        }
+
+        stage('Deploy App') {
             steps {
                 sh '''
                 echo "===== DEPLOYING APP ====="
@@ -37,7 +61,11 @@ pipeline {
 
                 docker run -d \
                 --name $CONTAINER_NAME \
-                -p 8083:8080 \
+                --network $NETWORK_NAME \
+                -e SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/devops \
+                -e SPRING_DATASOURCE_USERNAME=postgres \
+                -e SPRING_DATASOURCE_PASSWORD=postgres \
+                -p ${PORT}:8080 \
                 $IMAGE_NAME
                 '''
             }
@@ -46,10 +74,16 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                echo "Waiting for app..."
-                sleep 20
+                echo "===== WAITING FOR APP ====="
 
-                curl -f http://localhost:${PORT}/ || exit 1
+                for i in $(seq 1 30)
+                do
+                    curl -f http://localhost:${PORT}/ && break
+                    echo "App not ready yet..."
+                    sleep 10
+                done
+
+                curl -f http://localhost:${PORT}/
                 echo "APP IS RUNNING"
                 '''
             }
@@ -63,6 +97,13 @@ pipeline {
 
         failure {
             echo "❌ DEPLOYMENT FAILED"
+        }
+
+        always {
+            sh '''
+            echo "===== RUNNING CONTAINERS ====="
+            docker ps || true
+            '''
         }
     }
 }
