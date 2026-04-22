@@ -2,22 +2,22 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME = "app"
+        APP_NAME = "java_app"
         IMAGE_NAME = "devops-app"
         PORT = "8083"
-        VERSION = "${BUILD_NUMBER}"
     }
 
     stages {
 
-        stage('Checkout Code') {
+        stage('Checkout') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/Gitasadhubs/devops-project.git'
+                url: 'git@github.com:Gitasadhubs/devops-project.git',
+                credentialsId: 'github-ssh'
             }
         }
 
-        stage('Build') {
+        stage('Build Jar') {
             steps {
                 dir('app') {
                     sh 'mvn clean package -DskipTests'
@@ -35,49 +35,50 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh "docker build -t $IMAGE_NAME:$VERSION ./app"
+                sh 'docker build -t $IMAGE_NAME ./app'
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy (Compose)') {
             steps {
-                sh """
-                docker rm -f $APP_NAME || true
-                docker run -d --name $APP_NAME -p $PORT:8080 $IMAGE_NAME:$VERSION
-                """
+                sh '''
+                echo "Stopping old stack..."
+                docker compose down || true
+
+                echo "Starting new stack..."
+                docker compose up -d --build
+                '''
             }
         }
 
         stage('Health Check') {
             steps {
-                sh """
-                sleep 10
-                curl -f http://localhost:$PORT || exit 1
-                """
+                sh '''
+                echo "Waiting for app..."
+                sleep 15
+
+                curl -f http://localhost:8083 || exit 1
+                echo "App is UP"
+                '''
             }
         }
 
-        stage('Show Application URL') {
+        stage('Show URL') {
             steps {
-                script {
-                    def host = sh(script: "hostname -I | awk '{print \$1}'", returnStdout: true).trim()
-                    echo "--------------------------------------------------"
-                    echo "🚀 APPLICATION DEPLOYED SUCCESSFULLY"
-                    echo "👉 URL: http://${host}:${PORT}"
-                    echo "--------------------------------------------------"
-                }
+                echo "================================="
+                echo "APP URL: http://localhost:8083"
+                echo "================================="
             }
         }
     }
 
     post {
         success {
-            echo "✅ Deployment SUCCESS"
+            echo "✅ Deployment Successful"
         }
 
         failure {
-            echo "❌ Deployment FAILED"
-            sh 'docker logs app || true'
+            echo "❌ Pipeline Failed"
         }
     }
 }
