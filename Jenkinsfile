@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         IMAGE_NAME = "devops-app"
-        CONTAINER_NAME = "app"
         PORT = "8083"
     }
 
@@ -20,21 +19,119 @@ pipeline {
         stage('Verify Workspace') {
             steps {
                 sh '''
-                echo "===== WORKSPACE INFO ====="
+                echo "===== WORKSPACE ====="
                 pwd
-                echo "WORKSPACE = $WORKSPACE"
+                echo "WORKSPACE: $WORKSPACE"
 
-                echo "Root Files:"
+                echo "Files:"
                 ls -lah
 
-                echo "Workspace Files:"
-                ls -lah $WORKSPACE
-
-                echo "App Folder:"
-                ls -lah $WORKSPACE/app || true
+                echo "Searching pom.xml..."
+                find $WORKSPACE -name pom.xml
                 '''
             }
         }
+
+        stage('Build Maven (Docker)') {
+            steps {
+                sh '''
+                echo "===== BUILDING JAR ====="
+
+                docker run --rm \
+                -v $WORKSPACE:/workspace \
+                -w /workspace \
+                maven:3.9.6-eclipse-temurin-17 \
+                mvn clean package -DskipTests
+                '''
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh '''
+                echo "===== RUNNING TESTS ====="
+
+                docker run --rm \
+                -v $WORKSPACE:/workspace \
+                -w /workspace \
+                maven:3.9.6-eclipse-temurin-17 \
+                mvn test
+                '''
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                echo "===== BUILDING IMAGE ====="
+
+                docker build -t $IMAGE_NAME .
+                '''
+            }
+        }
+
+        stage('Deploy Application') {
+            steps {
+                sh '''
+                echo "===== DEPLOYING ====="
+
+                docker compose down || true
+                docker compose up -d --build
+                '''
+            }
+        }
+
+        stage('Wait For Startup') {
+            steps {
+                sh '''
+                echo "===== WAITING ====="
+                sleep 30
+                '''
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                sh '''
+                echo "===== HEALTH CHECK ====="
+
+                curl -f http://localhost:${PORT}/ || exit 1
+
+                echo "Application is UP"
+                '''
+            }
+        }
+
+        stage('Show URL') {
+            steps {
+                sh '''
+                echo "=================================="
+                echo "🚀 APPLICATION RUNNING"
+                echo "URL: http://localhost:${PORT}"
+                echo "=================================="
+                '''
+            }
+        }
+    }
+
+    post {
+
+        success {
+            echo "✅ PIPELINE SUCCESS"
+        }
+
+        failure {
+            echo "❌ PIPELINE FAILED"
+        }
+
+        always {
+            sh '''
+            echo "===== CONTAINERS ====="
+            docker ps || true
+            '''
+        }
+    }
+}        }
 
         stage('Build Maven (Docker)') {
             steps {
