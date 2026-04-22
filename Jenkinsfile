@@ -13,23 +13,27 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh 'mvn clean package -DskipTests'
+                dir('app') {
+                    sh 'mvn clean package -DskipTests'
+                }
             }
         }
 
         stage('Test') {
             steps {
-                sh 'mvn test'
+                dir('app') {
+                    sh 'mvn test'
+                }
             }
         }
 
         stage('Docker Build') {
             steps {
-                sh 'docker build -t devops-app .'
+                sh 'docker build -t devops-app ./app'
             }
         }
 
-        stage('Run') {
+        stage('Run Container') {
             steps {
                 sh '''
                 docker stop app || true
@@ -37,6 +41,16 @@ pipeline {
                 docker run -d --name app -p 8083:8080 devops-app
                 '''
             }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Build Successful'
+        }
+
+        failure {
+            echo '❌ Build Failed'
         }
     }
 }
