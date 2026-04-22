@@ -3,12 +3,13 @@ pipeline {
 
     environment {
         IMAGE_NAME = "devops-app"
+        CONTAINER_NAME = "app"
         PORT = "8083"
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
                 git branch: 'main',
                 url: 'git@github.com:Gitasadhubs/devops-project.git',
@@ -19,12 +20,15 @@ pipeline {
         stage('Verify Workspace') {
             steps {
                 sh '''
-                echo "===== WORKSPACE ====="
+                echo "===== WORKSPACE INFO ====="
+                echo "Current Path:"
                 pwd
-                echo "WORKSPACE: $WORKSPACE"
 
-                echo "Files:"
-                ls -lah
+                echo "Workspace:"
+                echo $WORKSPACE
+
+                echo "Workspace Files:"
+                ls -lah $WORKSPACE
 
                 echo "Searching pom.xml..."
                 find $WORKSPACE -name pom.xml
@@ -32,14 +36,14 @@ pipeline {
             }
         }
 
-        stage('Build Maven (Docker)') {
+        stage('Build Maven Project') {
             steps {
                 sh '''
                 echo "===== BUILDING JAR ====="
 
                 docker run --rm \
                 -v $WORKSPACE:/workspace \
-                -w /workspace \
+                -w /workspace/app \
                 maven:3.9.6-eclipse-temurin-17 \
                 mvn clean package -DskipTests
                 '''
@@ -53,7 +57,7 @@ pipeline {
 
                 docker run --rm \
                 -v $WORKSPACE:/workspace \
-                -w /workspace \
+                -w /workspace/app \
                 maven:3.9.6-eclipse-temurin-17 \
                 mvn test
                 '''
@@ -65,7 +69,7 @@ pipeline {
                 sh '''
                 echo "===== BUILDING IMAGE ====="
 
-                docker build -t $IMAGE_NAME .
+                docker build -t $IMAGE_NAME ./app
                 '''
             }
         }
@@ -73,7 +77,7 @@ pipeline {
         stage('Deploy Application') {
             steps {
                 sh '''
-                echo "===== DEPLOYING ====="
+                echo "===== DEPLOYING APP ====="
 
                 docker compose down || true
                 docker compose up -d --build
@@ -84,108 +88,7 @@ pipeline {
         stage('Wait For Startup') {
             steps {
                 sh '''
-                echo "===== WAITING ====="
-                sleep 30
-                '''
-            }
-        }
-
-        stage('Health Check') {
-            steps {
-                sh '''
-                echo "===== HEALTH CHECK ====="
-
-                curl -f http://localhost:${PORT}/ || exit 1
-
-                echo "Application is UP"
-                '''
-            }
-        }
-
-        stage('Show URL') {
-            steps {
-                sh '''
-                echo "=================================="
-                echo "🚀 APPLICATION RUNNING"
-                echo "URL: http://localhost:${PORT}"
-                echo "=================================="
-                '''
-            }
-        }
-    }
-
-    post {
-
-        success {
-            echo "✅ PIPELINE SUCCESS"
-        }
-
-        failure {
-            echo "❌ PIPELINE FAILED"
-        }
-
-        always {
-            sh '''
-            echo "===== CONTAINERS ====="
-            docker ps || true
-            '''
-        }
-    }
-}        }
-
-        stage('Build Maven (Docker)') {
-            steps {
-                sh '''
-                echo "===== MAVEN BUILD ====="
-
-                docker run --rm \
-                -v $WORKSPACE:/workspace \
-                -w /workspace/app \
-                maven:3.9.6-eclipse-temurin-17 \
-                mvn clean package -DskipTests
-                '''
-            }
-        }
-
-        stage('Run Tests') {
-            steps {
-                sh '''
-                echo "===== RUNNING TESTS ====="
-
-                docker run --rm \
-                -v $WORKSPACE:/workspace \
-                -w /workspace/app \
-                maven:3.9.6-eclipse-temurin-17 \
-                mvn test
-                '''
-            }
-        }
-
-        stage('Docker Build') {
-            steps {
-                sh '''
-                echo "===== BUILDING IMAGE ====="
-
-                docker build -t $IMAGE_NAME ./app
-                '''
-            }
-        }
-
-        stage('Deploy Stack') {
-            steps {
-                sh '''
-                echo "===== DEPLOYING ====="
-
-                docker compose down || true
-                docker compose up -d --build
-                '''
-            }
-        }
-
-        stage('Wait For App') {
-            steps {
-                sh '''
-                echo "===== WAITING FOR APP ====="
+                echo "===== WAITING FOR STARTUP ====="
                 sleep 30
                 '''
             }
@@ -203,11 +106,11 @@ pipeline {
             }
         }
 
-        stage('Show URL') {
+        stage('Show Application URL') {
             steps {
                 sh '''
                 echo "======================================"
-                echo "🚀 APPLICATION LIVE"
+                echo "🚀 APPLICATION DEPLOYED SUCCESSFULLY"
                 echo "URL: http://localhost:${PORT}"
                 echo "======================================"
                 '''
@@ -216,6 +119,7 @@ pipeline {
     }
 
     post {
+
         success {
             echo "✅ PIPELINE SUCCESS"
         }
@@ -226,7 +130,7 @@ pipeline {
 
         always {
             sh '''
-            echo "===== CONTAINER STATUS ====="
+            echo "===== DOCKER STATUS ====="
             docker ps || true
             '''
         }
