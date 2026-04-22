@@ -1,0 +1,59 @@
+pipeline {
+    agent any
+
+    environment {
+        BACKUP_DIR = "/var/jenkins_home/backups"
+        DATE = "$(date +%F-%H-%M)"
+    }
+
+    stages {
+
+        stage('Create Backup Folder') {
+            steps {
+                sh '''
+                mkdir -p $BACKUP_DIR
+                '''
+            }
+        }
+
+        stage('Backup App Source') {
+            steps {
+                sh '''
+                echo "===== BACKING UP SOURCE CODE ====="
+
+                tar -czf $BACKUP_DIR/app-backup-$(date +%F-%H-%M).tar.gz \
+                /var/jenkins_home/workspace/devops-pipeline
+                '''
+            }
+        }
+
+        stage('Backup PostgreSQL DB') {
+            steps {
+                sh '''
+                echo "===== BACKING UP DATABASE ====="
+
+                docker exec db pg_dump -U postgres devops > \
+                $BACKUP_DIR/db-backup-$(date +%F-%H-%M).sql
+                '''
+            }
+        }
+
+        stage('Backup Docker Volume') {
+            steps {
+                sh '''
+                echo "===== BACKING UP JENKINS VOLUME ====="
+
+                docker run --rm \
+                -v devops-project_jenkins_home:/volume \
+                -v $BACKUP_DIR:/backup \
+                alpine \
+                tar czf /backup/jenkins-volume-$(date +%F-%H-%M).tar.gz /volume
+                '''
+            }
+        }
+
+        stage('Show Backups') {
+            steps {
+                sh '''
+                echo "===== BACKUP FILES ====="
+}
