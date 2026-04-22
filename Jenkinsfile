@@ -17,10 +17,10 @@ pipeline {
             }
         }
 
-        stage('Build Maven') {
+        stage('Build Maven (Docker)') {
             steps {
                 sh '''
-                echo "Building Maven project..."
+                echo "===== BUILDING MAVEN PROJECT ====="
 
                 docker run --rm \
                 -v $WORKSPACE/app:/app \
@@ -34,7 +34,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
-                echo "Building Docker image..."
+                echo "===== BUILDING DOCKER IMAGE ====="
 
                 docker build -t $IMAGE_NAME ./app
                 '''
@@ -44,7 +44,7 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh '''
-                echo "Deploying application..."
+                echo "===== DEPLOYING CONTAINER ====="
 
                 docker stop $CONTAINER_NAME || true
                 docker rm $CONTAINER_NAME || true
@@ -60,37 +60,41 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                echo "Waiting for app..."
+                echo "===== HEALTH CHECK ====="
 
                 sleep 20
 
                 curl -f http://localhost:${PORT}/ || exit 1
 
-                echo "Application is running"
+                echo "APP IS RUNNING"
                 '''
             }
         }
 
         stage('Show URL') {
             steps {
-                echo "================================="
-                echo "🚀 APP LIVE: http://localhost:8083"
-                echo "================================="
+                echo "======================================"
+                echo "🚀 APPLICATION LIVE"
+                echo "URL: http://localhost:8083"
+                echo "======================================"
             }
         }
     }
 
     post {
         success {
-            echo "✅ Deployment SUCCESS"
+            echo "✅ PIPELINE SUCCESS"
         }
 
         failure {
-            echo "❌ Deployment FAILED"
+            echo "❌ PIPELINE FAILED"
         }
 
         always {
-            sh 'docker ps || true'
+            sh '''
+            echo "===== CONTAINERS ====="
+            docker ps || true
+            '''
         }
     }
 }
