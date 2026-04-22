@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DevOps test App</title>
+</head>
+<body>
+
+    <h2>User Management</h2>
+
+    <input type="text" id="name" placeholder="Enter name">
+    <button onclick="addUser()">Add User</button>
+
+    <h3>Users:</h3>
+    <ul id="userList"></ul>
+
+<script>
+async function addUser() {
+    const name = document.getElementById("name").value;
+
+    await fetch("/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name })
+    });
+
+    loadUsers();
+}
+
+async function loadUsers() {
+    const res = await fetch("/users");
+    const data = await res.json();
+
+    const list = document.getElementById("userList");
+    list.innerHTML = "";
+
+    data.forEach(u => {
+        const li = document.createElement("li");
+        li.innerText = u.name;
+        list.appendChild(li);
+    });
+}
+
+loadUsers();
+</script>
+
+</body>
+</html>
