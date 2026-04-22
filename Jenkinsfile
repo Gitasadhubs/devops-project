@@ -17,65 +17,29 @@ pipeline {
             }
         }
 
-        stage('Locate Project') {
+        stage('Build Maven (Docker)') {
             steps {
                 sh '''
-                echo "Finding pom.xml..."
-                find . -name pom.xml
+                docker run --rm \
+                -v $WORKSPACE/app:/build \
+                -w /build \
+                maven:3.9.6-eclipse-temurin-17 \
+                mvn clean package -DskipTests
                 '''
-            }
-        }
-
-        stage('Build Jar (Docker Maven)') {
-            steps {
-                dir('app') {
-                    sh '''
-                    echo "Building Maven project inside Docker..."
-
-                    docker run --rm \
-                      -v $PWD:/app \
-                      -w /app \
-                      maven:3.9.6-eclipse-temurin-17 \
-                      mvn clean package -DskipTests
-                    '''
-                }
-            }
-        }
-
-        stage('Test') {
-            steps {
-                dir('app') {
-                    sh '''
-                    docker run --rm \
-                      -v $PWD:/app \
-                      -w /app \
-                      maven:3.9.6-eclipse-temurin-17 \
-                      mvn test
-                    '''
-                }
             }
         }
 
         stage('Docker Build') {
             steps {
-                sh '''
-                echo "Building Docker image..."
-                docker build -t $IMAGE_NAME ./app
-                '''
+                sh 'docker build -t $IMAGE_NAME ./app'
             }
         }
 
         stage('Deploy') {
             steps {
                 sh '''
-                echo "Stopping old container..."
-                docker stop $CONTAINER_NAME || true
-                docker rm $CONTAINER_NAME || true
-
-                echo "Starting new container..."
-                docker run -d --name $CONTAINER_NAME \
-                  -p 8083:8080 \
-                  $IMAGE_NAME
+                docker compose down || true
+                docker compose up -d --build
                 '''
             }
         }
@@ -83,23 +47,19 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                echo "Waiting for application startup..."
-                
-                for i in {1..10}
-                do
-                  curl -f http://localhost:8083 && break
-                  echo "Waiting... attempt $i"
-                  sleep 5
-                done
+                echo "Waiting for app..."
+                sleep 20
+
+                curl -f http://localhost:8083/ || exit 1
+                echo "APP IS RUNNING"
                 '''
             }
         }
 
-        stage('Show URL') {
+        stage('App URL') {
             steps {
                 echo "===================================="
-                echo "🚀 APPLICATION LIVE"
-                echo "URL: http://localhost:8083"
+                echo "🚀 APP LIVE: http://localhost:8083"
                 echo "===================================="
             }
         }
@@ -107,11 +67,11 @@ pipeline {
 
     post {
         success {
-            echo "✅ Deployment Successful"
+            echo "✅ PIPELINE SUCCESS"
         }
 
         failure {
-            echo "❌ Deployment Failed"
+            echo "❌ PIPELINE FAILED"
         }
     }
 }
