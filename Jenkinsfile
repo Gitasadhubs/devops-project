@@ -1,10 +1,6 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'maven3'
-    }
-
     stages {
 
         stage('Checkout') {
@@ -27,13 +23,13 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Docker Build') {
             steps {
                 sh 'docker build -t devops-app .'
             }
         }
 
-        stage('Run Container') {
+        stage('Run') {
             steps {
                 sh '''
                 docker stop app || true
@@ -41,15 +37,6 @@ pipeline {
                 docker run -d --name app -p 8083:8080 devops-app
                 '''
             }
-        }
-    }
-
-    post {
-        success {
-            echo 'Pipeline SUCCESS 🚀'
-        }
-        failure {
-            echo 'Pipeline FAILED ❌'
         }
     }
 }
