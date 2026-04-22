@@ -5,15 +5,15 @@ pipeline {
         APP_NAME = "app"
         IMAGE_NAME = "devops-app"
         PORT = "8083"
+        VERSION = "${BUILD_NUMBER}"
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/Gitasadhubs/devops-project.git',
-                    credentialsId: 'github-token'
+                    url: 'https://github.com/Gitasadhubs/devops-project.git'
             }
         }
 
@@ -35,37 +35,49 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh 'docker build -t devops-app ./app'
+                sh "docker build -t $IMAGE_NAME:$VERSION ./app"
             }
         }
 
-        stage('Run Container') {
+        stage('Deploy') {
             steps {
-                sh '''
-                echo "Stopping old container if exists..."
+                sh """
+                docker rm -f $APP_NAME || true
+                docker run -d --name $APP_NAME -p $PORT:8080 $IMAGE_NAME:$VERSION
+                """
+            }
+        }
 
-                docker ps -q --filter "name=$APP_NAME" | xargs -r docker stop || true
-                docker ps -aq --filter "name=$APP_NAME" | xargs -r docker rm || true
+        stage('Health Check') {
+            steps {
+                sh """
+                sleep 10
+                curl -f http://localhost:$PORT || exit 1
+                """
+            }
+        }
 
-                echo "Checking port $PORT usage..."
-                if lsof -i :$PORT; then
-                    echo "Port $PORT is already in use. Stopping process..."
-                    fuser -k $PORT/tcp || true
-                fi
-
-                echo "Starting new container..."
-                docker run -d --name $APP_NAME -p $PORT:8080 $IMAGE_NAME
-                '''
+        stage('Show Application URL') {
+            steps {
+                script {
+                    def host = sh(script: "hostname -I | awk '{print \$1}'", returnStdout: true).trim()
+                    echo "--------------------------------------------------"
+                    echo "🚀 APPLICATION DEPLOYED SUCCESSFULLY"
+                    echo "👉 URL: http://${host}:${PORT}"
+                    echo "--------------------------------------------------"
+                }
             }
         }
     }
 
     post {
         success {
-            echo "✅ Deployment Successful"
+            echo "✅ Deployment SUCCESS"
         }
+
         failure {
-            echo "❌ Deployment Failed"
+            echo "❌ Deployment FAILED"
+            sh 'docker logs app || true'
         }
     }
 }
