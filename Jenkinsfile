@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = "devops-app"
+        CONTAINER_NAME = "app"
         PORT = "8083"
     }
 
@@ -16,23 +17,7 @@ pipeline {
             }
         }
 
-        stage('Verify Code') {
-            steps {
-                sh '''
-                echo "===== WORKSPACE ====="
-                pwd
-                ls -lah
-
-                echo "===== APP DIR ====="
-                ls -lah app
-
-                echo "===== POM CHECK ====="
-                ls app/pom.xml
-                '''
-            }
-        }
-
-        stage('Build Maven (Docker)') {
+        stage('Build Maven') {
             steps {
                 sh '''
                 echo "Building Maven project..."
@@ -59,13 +44,13 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh '''
-                echo "Deploying container..."
+                echo "Deploying application..."
 
-                docker stop app || true
-                docker rm app || true
+                docker stop $CONTAINER_NAME || true
+                docker rm $CONTAINER_NAME || true
 
                 docker run -d \
-                --name app \
+                --name $CONTAINER_NAME \
                 -p 8083:8080 \
                 $IMAGE_NAME
                 '''
@@ -79,29 +64,29 @@ pipeline {
 
                 sleep 20
 
-                curl -f http://localhost:${PORT} || exit 1
+                curl -f http://localhost:${PORT}/ || exit 1
 
-                echo "APP IS RUNNING"
+                echo "Application is running"
                 '''
             }
         }
 
-        stage('App URL') {
+        stage('Show URL') {
             steps {
-                echo "===================================="
-                echo "🚀 APP: http://localhost:8083"
-                echo "===================================="
+                echo "================================="
+                echo "🚀 APP LIVE: http://localhost:8083"
+                echo "================================="
             }
         }
     }
 
     post {
         success {
-            echo "✅ PIPELINE SUCCESS"
+            echo "✅ Deployment SUCCESS"
         }
 
         failure {
-            echo "❌ PIPELINE FAILED"
+            echo "❌ Deployment FAILED"
         }
 
         always {
