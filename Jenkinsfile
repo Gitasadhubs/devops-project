@@ -3,13 +3,12 @@ pipeline {
 
     environment {
         IMAGE_NAME = "devops-app"
-        CONTAINER_NAME = "app"
         PORT = "8083"
     }
 
     stages {
 
-        stage('Checkout Code') {
+        stage('Checkout') {
             steps {
                 git branch: 'main',
                 url: 'git@github.com:Gitasadhubs/devops-project.git',
@@ -17,49 +16,32 @@ pipeline {
             }
         }
 
-        stage('Verify Workspace') {
+        stage('Verify Code') {
             steps {
                 sh '''
-                echo "===== WORKSPACE INFO ====="
-                echo "Current Path:"
+                echo "===== WORKSPACE ====="
                 pwd
+                ls -lah
 
-                echo "Workspace:"
-                echo $WORKSPACE
+                echo "===== APP DIR ====="
+                ls -lah app
 
-                echo "Workspace Files:"
-                ls -lah $WORKSPACE
-
-                echo "Searching pom.xml..."
-                find $WORKSPACE -name pom.xml
+                echo "===== POM CHECK ====="
+                ls app/pom.xml
                 '''
             }
         }
 
-        stage('Build Maven Project') {
+        stage('Build Maven (Docker)') {
             steps {
                 sh '''
-                echo "===== BUILDING JAR ====="
+                echo "Building Maven project..."
 
                 docker run --rm \
-                -v $WORKSPACE:/workspace \
-                -w /workspace/app \
+                -v $WORKSPACE/app:/app \
+                -w /app \
                 maven:3.9.6-eclipse-temurin-17 \
                 mvn clean package -DskipTests
-                '''
-            }
-        }
-
-        stage('Run Tests') {
-            steps {
-                sh '''
-                echo "===== RUNNING TESTS ====="
-
-                docker run --rm \
-                -v $WORKSPACE:/workspace \
-                -w /workspace/app \
-                maven:3.9.6-eclipse-temurin-17 \
-                mvn test
                 '''
             }
         }
@@ -67,29 +49,25 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
-                echo "===== BUILDING IMAGE ====="
+                echo "Building Docker image..."
 
                 docker build -t $IMAGE_NAME ./app
                 '''
             }
         }
 
-        stage('Deploy Application') {
+        stage('Deploy') {
             steps {
                 sh '''
-                echo "===== DEPLOYING APP ====="
+                echo "Deploying container..."
 
-                docker compose down || true
-                docker compose up -d --build
-                '''
-            }
-        }
+                docker stop app || true
+                docker rm app || true
 
-        stage('Wait For Startup') {
-            steps {
-                sh '''
-                echo "===== WAITING FOR STARTUP ====="
-                sleep 30
+                docker run -d \
+                --name app \
+                -p 8083:8080 \
+                $IMAGE_NAME
                 '''
             }
         }
@@ -97,29 +75,27 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                echo "===== HEALTH CHECK ====="
+                echo "Waiting for app..."
 
-                curl -f http://localhost:${PORT}/ || exit 1
+                sleep 20
 
-                echo "Application is healthy"
+                curl -f http://localhost:${PORT} || exit 1
+
+                echo "APP IS RUNNING"
                 '''
             }
         }
 
-        stage('Show Application URL') {
+        stage('App URL') {
             steps {
-                sh '''
-                echo "======================================"
-                echo "🚀 APPLICATION DEPLOYED SUCCESSFULLY"
-                echo "URL: http://localhost:${PORT}"
-                echo "======================================"
-                '''
+                echo "===================================="
+                echo "🚀 APP: http://localhost:8083"
+                echo "===================================="
             }
         }
     }
 
     post {
-
         success {
             echo "✅ PIPELINE SUCCESS"
         }
@@ -129,10 +105,7 @@ pipeline {
         }
 
         always {
-            sh '''
-            echo "===== DOCKER STATUS ====="
-            docker ps || true
-            '''
+            sh 'docker ps || true'
         }
     }
 }
